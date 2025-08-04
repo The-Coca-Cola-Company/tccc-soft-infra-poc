@@ -31,13 +31,13 @@ This deploys all hub infrastructure in a single operation:
 - ✅ Private DNS Zones (10 zones)
 - ✅ Private Endpoints (all services)
 
-### 1️⃣ Full Production Deployment
-[![Deploy TCCC Soft Hub](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fyour-repo%2Fsoft-poc%2Fmain%2Ftccc-soft-manager%2Fdeployment%2Ftccc-soft-hub-main.json)
+### 1️⃣ Production Deployment (Premium SKU)
+[![Deploy TCCC Soft Hub Premium](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fyour-repo%2Fsoft-poc%2Fmain%2Ftccc-soft-manager%2Fdeployment%2Ftccc-soft-hub-main.json)
 
-### 2️⃣ Development Deployment
-[![Deploy TCCC Soft Hub Dev](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fyour-repo%2Fsoft-poc%2Fmain%2Ftccc-soft-manager%2Fdeployment%2Ftccc-soft-hub-main.json)
+### 2️⃣ Development Deployment (Developer SKU)
+[![Deploy TCCC Soft Hub Developer](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fyour-repo%2Fsoft-poc%2Fmain%2Ftccc-soft-manager%2Fdeployment%2Ftccc-soft-hub-main.json)
 
-*Use same template - select Developer SKU for API Management*
+*Same template - choose SKU during deployment*
 
 ---
 
@@ -297,6 +297,32 @@ tccc-soft-manager/
 - [Agent Connection Guide](../AGENT-HUB-CONNECTION-GUIDE.md)
 - [Hub-Spoke Validation](../HUB-SPOKE-VALIDATION.md)
 - [Architecture Verification](../ARCHITECTURE-VERIFICATION.md)
+
+---
+
+## 📊 API Management SKU Comparison
+
+| Feature | Developer SKU | Premium SKU | Impact on Your Architecture |
+|---------|---------------|-------------|----------------------------|
+| **Monthly Cost** | ~$50 | ~$3,000+ | Significant cost difference |
+| **Deployment Purpose** | Dev/Test/Demo | Production | Choose based on environment |
+| **SLA** | None | 99.95% | Availability guarantee |
+| **Private Link Support** | ❌ | ✅ | Not needed (agents use HTTPS) |
+| **Virtual Network** | ✅ Internal mode | ✅ Internal mode | Both support VNet deployment |
+| **Subscription Keys** | ✅ | ✅ | Your authentication method |
+| **Rate Limiting** | ✅ | ✅ | Per-agent limits work |
+| **Custom Policies** | ✅ | ✅ | Hub-spoke enforcement works |
+| **OAuth 2.0/JWT** | ✅ | ✅ | Available if needed |
+| **Multi-region** | ❌ | ✅ | Geo-redundancy |
+| **Auto-scaling** | Limited | ✅ Full | Performance under load |
+| **Developer Portal** | ✅ | ✅ | API documentation |
+| **Analytics** | ✅ | ✅ | Usage monitoring |
+| **Security Features** | ✅ All features | ✅ All features | Same security capabilities |
+
+### 🎯 Recommendation
+- **For Demo/POC/Dev**: Use Developer SKU - fully functional and secure
+- **For Production**: Use Premium SKU - adds SLA and enterprise features
+- **Key Point**: Security features are identical - Developer SKU is secure for your use case
 
 ---
 
