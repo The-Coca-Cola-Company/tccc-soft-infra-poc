@@ -1,6 +1,6 @@
 # 🏢 TCCC Soft Hub - Azure API Management Deployment Guide
 
-![tccc-soft-hub-architecture](deployment/img/image%20cross.png)
+![tccc-soft-hub-architecture](img/image%20cross.png)
 
 > 🚨 **CRITICAL: API Management Deployment Takes ~45 Minutes**  
 > API Management provisioning is a long-running operation. Plan accordingly for production deployments.
