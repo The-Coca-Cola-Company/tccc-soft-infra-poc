@@ -1,0 +1,477 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "description": "🚀 TCCC Soft Hub with API Management - Enterprise Hub-Spoke Architecture WITHOUT VNet Peering"
+  },
+  "parameters": {
+    "environment": {
+      "type": "string",
+      "defaultValue": "dev",
+      "allowedValues": ["dev", "test", "prod"],
+      "metadata": {
+        "description": "Environment name"
+      }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Azure region for all resources"
+      }
+    },
+    "apiManagementSku": {
+      "type": "string",
+      "defaultValue": "Developer",
+      "allowedValues": ["Developer", "Premium"],
+      "metadata": {
+        "description": "API Management SKU (Premium required for Private Link)"
+      }
+    },
+    "publisherEmail": {
+      "type": "string",
+      "metadata": {
+        "description": "Email address for API Management publisher"
+      }
+    },
+    "publisherName": {
+      "type": "string",
+      "defaultValue": "The Coca-Cola Company",
+      "metadata": {
+        "description": "Organization name for API Management"
+      }
+    },
+    "bottlerApiKeys": {
+      "type": "array",
+      "defaultValue": [],
+      "metadata": {
+        "description": "Array of bottler configurations with names and keys"
+      }
+    }
+  },
+  "variables": {
+    "uniqueSuffix": "[substring(uniqueString(resourceGroup().id), 0, 6)]",
+    "baseName": "tccc-soft",
+    "resourcePrefix": "[format('{0}-{1}', variables('baseName'), parameters('environment'))]",
+    
+    "functionAppName": "[format('{0}-func-{1}', variables('resourcePrefix'), variables('uniqueSuffix'))]",
+    "appServicePlanName": "[format('{0}-asp-{1}', variables('resourcePrefix'), variables('uniqueSuffix'))]",
+    "storageAccountName": "[toLower(format('{0}st{1}', replace(variables('resourcePrefix'), '-', ''), variables('uniqueSuffix')))]",
+    "keyVaultName": "[format('{0}-kv-{1}', variables('resourcePrefix'), substring(variables('uniqueSuffix'), 0, 4))]",
+    "appInsightsName": "[format('{0}-ai-{1}', variables('resourcePrefix'), variables('uniqueSuffix'))]",
+    "logAnalyticsName": "[format('{0}-law-{1}', variables('resourcePrefix'), variables('uniqueSuffix'))]",
+    
+    "cosmosDbName": "[format('{0}-cosmos-{1}', variables('resourcePrefix'), variables('uniqueSuffix'))]",
+    "serviceBusNamespace": "[format('{0}-sb-{1}', variables('resourcePrefix'), variables('uniqueSuffix'))]",
+    "eventGridTopic": "[format('{0}-eg-{1}', variables('resourcePrefix'), variables('uniqueSuffix'))]",
+    "aiHubName": "[format('{0}-aihub-{1}', variables('resourcePrefix'), variables('uniqueSuffix'))]",
+    
+    "apiManagementName": "[format('{0}-apim-{1}', variables('resourcePrefix'), variables('uniqueSuffix'))]",
+    "vnetName": "[format('{0}-vnet-{1}', variables('resourcePrefix'), variables('uniqueSuffix'))]",
+    
+    "privateDnsZones": [
+      "privatelink.azurewebsites.net",
+      "privatelink.documents.azure.com",
+      "privatelink.servicebus.windows.net",
+      "privatelink.eventgrid.azure.net",
+      "privatelink.vaultcore.azure.net",
+      "privatelink.azure-api.net",
+      "privatelink.blob.core.windows.net",
+      "privatelink.file.core.windows.net",
+      "privatelink.api.azureml.ms",
+      "privatelink.notebooks.azure.net"
+    ]
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Network/virtualNetworks",
+      "apiVersion": "2023-05-01",
+      "name": "[variables('vnetName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "addressSpace": {
+          "addressPrefixes": ["10.0.0.0/16"]
+        },
+        "subnets": [
+          {
+            "name": "snet-apim",
+            "properties": {
+              "addressPrefix": "10.0.1.0/24",
+              "privateEndpointNetworkPolicies": "Disabled",
+              "privateLinkServiceNetworkPolicies": "Disabled"
+            }
+          },
+          {
+            "name": "snet-functions",
+            "properties": {
+              "addressPrefix": "10.0.2.0/24",
+              "delegations": [
+                {
+                  "name": "Microsoft.Web/serverFarms",
+                  "properties": {
+                    "serviceName": "Microsoft.Web/serverFarms"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "snet-private-endpoints",
+            "properties": {
+              "addressPrefix": "10.0.3.0/24",
+              "privateEndpointNetworkPolicies": "Disabled"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts",
+      "apiVersion": "2023-01-01",
+      "name": "[variables('storageAccountName')]",
+      "location": "[parameters('location')]",
+      "sku": {
+        "name": "Standard_LRS"
+      },
+      "kind": "StorageV2",
+      "properties": {
+        "supportsHttpsTrafficOnly": true,
+        "minimumTlsVersion": "TLS1_2",
+        "allowBlobPublicAccess": false,
+        "networkAcls": {
+          "defaultAction": "Deny",
+          "bypass": "AzureServices"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.KeyVault/vaults",
+      "apiVersion": "2023-07-01",
+      "name": "[variables('keyVaultName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "sku": {
+          "family": "A",
+          "name": "standard"
+        },
+        "tenantId": "[tenant().tenantId]",
+        "enabledForDeployment": false,
+        "enabledForDiskEncryption": false,
+        "enabledForTemplateDeployment": true,
+        "enableSoftDelete": true,
+        "enablePurgeProtection": true,
+        "enableRbacAuthorization": true,
+        "networkAcls": {
+          "defaultAction": "Deny",
+          "bypass": "AzureServices"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2022-10-01",
+      "name": "[variables('logAnalyticsName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "sku": {
+          "name": "PerGB2018"
+        },
+        "retentionInDays": 30
+      }
+    },
+    {
+      "type": "Microsoft.Insights/components",
+      "apiVersion": "2020-02-02",
+      "name": "[variables('appInsightsName')]",
+      "location": "[parameters('location')]",
+      "kind": "web",
+      "properties": {
+        "Application_Type": "web",
+        "WorkspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', variables('logAnalyticsName'))]"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.OperationalInsights/workspaces', variables('logAnalyticsName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Web/serverfarms",
+      "apiVersion": "2023-01-01",
+      "name": "[variables('appServicePlanName')]",
+      "location": "[parameters('location')]",
+      "sku": {
+        "name": "EP1",
+        "tier": "ElasticPremium"
+      },
+      "kind": "elastic",
+      "properties": {
+        "maximumElasticWorkerCount": 20,
+        "reserved": true
+      }
+    },
+    {
+      "type": "Microsoft.DocumentDB/databaseAccounts",
+      "apiVersion": "2023-11-15",
+      "name": "[variables('cosmosDbName')]",
+      "location": "[parameters('location')]",
+      "kind": "GlobalDocumentDB",
+      "properties": {
+        "consistencyPolicy": {
+          "defaultConsistencyLevel": "Session"
+        },
+        "locations": [
+          {
+            "locationName": "[parameters('location')]",
+            "failoverPriority": 0
+          }
+        ],
+        "databaseAccountOfferType": "Standard",
+        "publicNetworkAccess": "Disabled"
+      }
+    },
+    {
+      "type": "Microsoft.ServiceBus/namespaces",
+      "apiVersion": "2022-10-01-preview",
+      "name": "[variables('serviceBusNamespace')]",
+      "location": "[parameters('location')]",
+      "sku": {
+        "name": "Standard"
+      },
+      "properties": {
+        "publicNetworkAccess": "Disabled"
+      }
+    },
+    {
+      "type": "Microsoft.EventGrid/topics",
+      "apiVersion": "2022-06-15",
+      "name": "[variables('eventGridTopic')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "inputSchema": "EventGridSchema",
+        "publicNetworkAccess": "Disabled"
+      }
+    },
+    {
+      "type": "Microsoft.MachineLearningServices/workspaces",
+      "apiVersion": "2023-10-01",
+      "name": "[format('{0}-aihub-{1}', variables('resourcePrefix'), variables('uniqueSuffix'))]",
+      "location": "[parameters('location')]",
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "properties": {
+        "friendlyName": "TCCC AI Hub",
+        "description": "AI Foundry Hub for TCCC multi-agent orchestration",
+        "storageAccount": "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]",
+        "keyVault": "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]",
+        "applicationInsights": "[resourceId('Microsoft.Insights/components', variables('appInsightsName'))]",
+        "publicNetworkAccess": "Disabled",
+        "v1LegacyMode": false
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]",
+        "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]",
+        "[resourceId('Microsoft.Insights/components', variables('appInsightsName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.ApiManagement/service",
+      "apiVersion": "2023-03-01-preview",
+      "name": "[variables('apiManagementName')]",
+      "location": "[parameters('location')]",
+      "sku": {
+        "name": "[parameters('apiManagementSku')]",
+        "capacity": 1
+      },
+      "properties": {
+        "publisherEmail": "[parameters('publisherEmail')]",
+        "publisherName": "[parameters('publisherName')]",
+        "virtualNetworkType": "Internal",
+        "virtualNetworkConfiguration": {
+          "subnetResourceId": "[format('{0}/subnets/snet-apim', resourceId('Microsoft.Network/virtualNetworks', variables('vnetName')))]"
+        },
+        "customProperties": {
+          "Microsoft.WindowsAzure.ApiManagement.Gateway.Security.Protocols.Tls10": "false",
+          "Microsoft.WindowsAzure.ApiManagement.Gateway.Security.Protocols.Tls11": "false",
+          "Microsoft.WindowsAzure.ApiManagement.Gateway.Security.Protocols.Ssl30": "false",
+          "Microsoft.WindowsAzure.ApiManagement.Gateway.Security.Backend.Protocols.Tls10": "false",
+          "Microsoft.WindowsAzure.ApiManagement.Gateway.Security.Backend.Protocols.Tls11": "false",
+          "Microsoft.WindowsAzure.ApiManagement.Gateway.Security.Backend.Protocols.Ssl30": "false"
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/virtualNetworks', variables('vnetName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Web/sites",
+      "apiVersion": "2023-01-01",
+      "name": "[variables('functionAppName')]",
+      "location": "[parameters('location')]",
+      "kind": "functionapp,linux",
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "properties": {
+        "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('appServicePlanName'))]",
+        "httpsOnly": true,
+        "virtualNetworkSubnetId": "[format('{0}/subnets/snet-functions', resourceId('Microsoft.Network/virtualNetworks', variables('vnetName')))]",
+        "siteConfig": {
+          "vnetRouteAllEnabled": true,
+          "functionsRuntimeScaleMonitoringEnabled": true,
+          "minTlsVersion": "1.2",
+          "ftpsState": "Disabled",
+          "appSettings": [
+            {
+              "name": "AzureWebJobsStorage",
+              "value": "[format('DefaultEndpointsProtocol=https;AccountName={0};AccountKey={1};EndpointSuffix={2}', variables('storageAccountName'), listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), '2023-01-01').keys[0].value, environment().suffixes.storage)]"
+            },
+            {
+              "name": "FUNCTIONS_EXTENSION_VERSION",
+              "value": "~4"
+            },
+            {
+              "name": "FUNCTIONS_WORKER_RUNTIME",
+              "value": "python"
+            },
+            {
+              "name": "AGENT_TYPE",
+              "value": "TCCC_SOFT_HUB"
+            },
+            {
+              "name": "API_MANAGEMENT_URL",
+              "value": "[format('https://{0}.azure-api.net', variables('apiManagementName'))]"
+            },
+            {
+              "name": "API_MANAGEMENT_INTERNAL_URL",
+              "value": "[format('https://{0}-internal.azure-api.net', variables('apiManagementName'))]"
+            },
+            {
+              "name": "KEY_VAULT_URI",
+              "value": "[reference(resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName')), '2023-07-01').vaultUri]"
+            },
+            {
+              "name": "COSMOS_DB_ENDPOINT",
+              "value": "[reference(resourceId('Microsoft.DocumentDB/databaseAccounts', variables('cosmosDbName')), '2023-11-15').documentEndpoint]"
+            },
+            {
+              "name": "SERVICE_BUS_NAMESPACE",
+              "value": "[variables('serviceBusNamespace')]"
+            },
+            {
+              "name": "EVENT_GRID_TOPIC",
+              "value": "[variables('eventGridTopic')]"
+            },
+            {
+              "name": "AI_HUB_ENDPOINT",
+              "value": "[reference(resourceId('Microsoft.MachineLearningServices/workspaces', variables('aiHubName')), '2023-10-01').workspaceId]"
+            },
+            {
+              "name": "APPLICATION_INSIGHTS_CONNECTION_STRING",
+              "value": "[reference(resourceId('Microsoft.Insights/components', variables('appInsightsName')), '2020-02-02').ConnectionString]"
+            },
+            {
+              "name": "HUB_ROLE",
+              "value": "soft_central_orchestrator"
+            },
+            {
+              "name": "SECURITY_MODE",
+              "value": "api_management"
+            }
+          ],
+          "pythonVersion": "3.11",
+          "cors": {
+            "allowedOrigins": ["https://portal.azure.com"],
+            "supportCredentials": true
+          }
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/serverfarms', variables('appServicePlanName'))]",
+        "[resourceId('Microsoft.Network/virtualNetworks', variables('vnetName'))]",
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]",
+        "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]",
+        "[resourceId('Microsoft.Insights/components', variables('appInsightsName'))]",
+        "[resourceId('Microsoft.DocumentDB/databaseAccounts', variables('cosmosDbName'))]",
+        "[resourceId('Microsoft.ServiceBus/namespaces', variables('serviceBusNamespace'))]",
+        "[resourceId('Microsoft.EventGrid/topics', variables('eventGridTopic'))]",
+        "[resourceId('Microsoft.MachineLearningServices/workspaces', variables('aiHubName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Network/privateDnsZones",
+      "apiVersion": "2020-06-01",
+      "name": "[variables('privateDnsZones')[copyIndex()]]",
+      "location": "global",
+      "copy": {
+        "name": "privateDnsZonesCopy",
+        "count": "[length(variables('privateDnsZones'))]"
+      }
+    },
+    {
+      "type": "Microsoft.Network/privateDnsZones/virtualNetworkLinks",
+      "apiVersion": "2020-06-01",
+      "name": "[format('{0}/link-to-{1}', variables('privateDnsZones')[copyIndex()], variables('vnetName'))]",
+      "location": "global",
+      "properties": {
+        "registrationEnabled": false,
+        "virtualNetwork": {
+          "id": "[resourceId('Microsoft.Network/virtualNetworks', variables('vnetName'))]"
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/privateDnsZones', variables('privateDnsZones')[copyIndex()])]",
+        "[resourceId('Microsoft.Network/virtualNetworks', variables('vnetName'))]"
+      ],
+      "copy": {
+        "name": "vnetLinksCopy",
+        "count": "[length(variables('privateDnsZones'))]"
+      }
+    },
+    {
+      "type": "Microsoft.Network/privateEndpoints",
+      "apiVersion": "2023-05-01",
+      "name": "[format('{0}-apim-pe', variables('resourcePrefix'))]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "subnet": {
+          "id": "[format('{0}/subnets/snet-private-endpoints', resourceId('Microsoft.Network/virtualNetworks', variables('vnetName')))]"
+        },
+        "privateLinkServiceConnections": [
+          {
+            "name": "apim-connection",
+            "properties": {
+              "privateLinkServiceId": "[resourceId('Microsoft.ApiManagement/service', variables('apiManagementName'))]",
+              "groupIds": ["Gateway"]
+            }
+          }
+        ]
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.ApiManagement/service', variables('apiManagementName'))]",
+        "[resourceId('Microsoft.Network/virtualNetworks', variables('vnetName'))]"
+      ]
+    }
+  ],
+  "outputs": {
+    "apiManagementGatewayUrl": {
+      "type": "string",
+      "value": "[format('https://{0}.azure-api.net', variables('apiManagementName'))]"
+    },
+    "apiManagementName": {
+      "type": "string",
+      "value": "[variables('apiManagementName')]"
+    },
+    "functionAppName": {
+      "type": "string",
+      "value": "[variables('functionAppName')]"
+    },
+    "keyVaultName": {
+      "type": "string",
+      "value": "[variables('keyVaultName')]"
+    },
+    "hubInstructions": {
+      "type": "string",
+      "value": "TCCC Soft Hub deployed with API Management! Configure API policies and subscriptions for bottlers."
+    }
+  }
+}

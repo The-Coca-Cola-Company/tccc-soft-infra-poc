@@ -1,0 +1,465 @@
+{
+  "openapi": "3.0.1",
+  "info": {
+    "title": "TCCC Soft Hub API",
+    "description": "Hub API for Coca-Cola Bottler Agent Communication",
+    "version": "1.0.0",
+    "contact": {
+      "name": "Emerg Tech",
+      "email": "cvaneags@coca-cola.com"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://{apim-name}.azure-api.net/hub",
+      "variables": {
+        "apim-name": {
+          "default": "tccc-soft-dev-apim"
+        }
+      }
+    }
+  ],
+  "security": [
+    {
+      "apiKeyHeader": []
+    }
+  ],
+  "paths": {
+    "/health": {
+      "get": {
+        "summary": "Health Check",
+        "description": "Check the health status of the hub",
+        "operationId": "healthCheck",
+        "tags": ["System"],
+        "responses": {
+          "200": {
+            "description": "Hub is healthy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/agents/register": {
+      "post": {
+        "summary": "Register Bottler Agent",
+        "description": "Register a new bottler agent with the hub",
+        "operationId": "registerAgent",
+        "tags": ["Agent Management"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentRegistration"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Agent registered successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentRegistrationResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Hub-Spoke violation or unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/agents/list": {
+      "get": {
+        "summary": "List Registered Agents",
+        "description": "Get a list of all registered bottler agents",
+        "operationId": "listAgents",
+        "tags": ["Agent Management"],
+        "responses": {
+          "200": {
+            "description": "List of agents retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentListResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/query": {
+      "post": {
+        "summary": "Process Query",
+        "description": "Process a financial query from a bottler",
+        "operationId": "processQuery",
+        "tags": ["Queries"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/QueryRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Query processed successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QueryResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Hub-Spoke violation detected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/data/submit": {
+      "post": {
+        "summary": "Submit Financial Data",
+        "description": "Submit financial data from a bottler to the hub",
+        "operationId": "submitData",
+        "tags": ["Data Management"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FinancialData"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Data submitted successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DataSubmissionResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/orchestrate/analysis": {
+      "post": {
+        "summary": "Orchestrate Analysis",
+        "description": "Orchestrate multi-bottler financial analysis",
+        "operationId": "orchestrateAnalysis",
+        "tags": ["Orchestration"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrchestrationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Analysis orchestrated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrchestrationResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "apiKeyHeader": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "Ocp-Apim-Subscription-Key",
+        "description": "API Management subscription key"
+      }
+    },
+    "schemas": {
+      "HealthResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "example": "healthy"
+          },
+          "agent_type": {
+            "type": "string",
+            "example": "TCCC_SOFT_HUB"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "registered_bottlers": {
+            "type": "integer",
+            "example": 5
+          }
+        }
+      },
+      "AgentRegistration": {
+        "type": "object",
+        "required": ["name", "capabilities"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "example": "ARCA Continental"
+          },
+          "capabilities": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "example": ["financial_analysis", "revenue_reporting"]
+          },
+          "region": {
+            "type": "string",
+            "example": "Mexico"
+          }
+        }
+      },
+      "AgentRegistrationResponse": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string"
+          },
+          "bottler": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "capabilities": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "region": {
+                "type": "string"
+              },
+              "registered_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "status": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "AgentListResponse": {
+        "type": "object",
+        "properties": {
+          "bottlers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AgentInfo"
+            }
+          },
+          "count": {
+            "type": "integer"
+          }
+        }
+      },
+      "AgentInfo": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "region": {
+            "type": "string"
+          }
+        }
+      },
+      "QueryRequest": {
+        "type": "object",
+        "required": ["query"],
+        "properties": {
+          "query": {
+            "type": "string",
+            "example": "What is the total revenue for 2024?"
+          },
+          "parameters": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        }
+      },
+      "QueryResponse": {
+        "type": "object",
+        "properties": {
+          "query_id": {
+            "type": "string"
+          },
+          "bottler_id": {
+            "type": "string"
+          },
+          "query": {
+            "type": "string"
+          },
+          "response": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "FinancialData": {
+        "type": "object",
+        "properties": {
+          "revenue": {
+            "type": "number",
+            "example": 1500000
+          },
+          "costs": {
+            "type": "number",
+            "example": 900000
+          },
+          "margin": {
+            "type": "number",
+            "example": 0.4
+          },
+          "period": {
+            "type": "string",
+            "example": "2024-Q1"
+          }
+        }
+      },
+      "DataSubmissionResponse": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string"
+          },
+          "data_id": {
+            "type": "string"
+          },
+          "bottler_id": {
+            "type": "string"
+          }
+        }
+      },
+      "OrchestrationRequest": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "example": "revenue_analysis"
+          },
+          "parameters": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        }
+      },
+      "OrchestrationResponse": {
+        "type": "object",
+        "properties": {
+          "analysis_id": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "bottlers_analyzed": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "status": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          },
+          "requestId": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}
