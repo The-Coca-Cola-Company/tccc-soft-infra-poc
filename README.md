@@ -27,7 +27,6 @@ This deploys all hub infrastructure in a single operation:
 - ✅ Service Bus (async messaging)
 - ✅ Event Grid (real-time events)
 - ✅ Blob Storage (data persistence)
-- ✅ Key Vault (secrets management)
 - ✅ Private DNS Zones (10 zones)
 - ✅ Private Endpoints (all services)
 
