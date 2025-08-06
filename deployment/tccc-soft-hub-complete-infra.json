@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-  "contentVersion": "4.1.0.0",
+  "contentVersion": "4.1.1.0",
   "metadata": {
     "description": "🚀 TCCC Soft Hub Complete Deployment - NO KEY VAULT - MCP Integration + Service Bus Smart Rules"
   },
@@ -92,7 +92,7 @@
     {
       "comments": "=== STORAGE ===",
       "type": "Microsoft.Storage/storageAccounts",
-      "apiVersion": "2023-05-01",
+      "apiVersion": "2022-10-01",
       "name": "[variables('storageAccountName')]",
       "location": "[parameters('location')]",
       "sku": {
@@ -111,7 +111,7 @@
     },
     {
       "type": "Microsoft.Storage/storageAccounts/blobServices",
-      "apiVersion": "2023-05-01",
+      "apiVersion": "2022-10-01",
       "name": "[format('{0}/default', variables('storageAccountName'))]",
       "properties": {
         "cors": {
@@ -128,7 +128,7 @@
     },
     {
       "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
-      "apiVersion": "2023-05-01",
+      "apiVersion": "2022-10-01",
       "name": "[format('{0}/default/agent-data', variables('storageAccountName'))]",
       "properties": {
         "publicAccess": "None"
@@ -139,7 +139,7 @@
     },
     {
       "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
-      "apiVersion": "2023-05-01",
+      "apiVersion": "2022-10-01",
       "name": "[format('{0}/default/excel-uploads', variables('storageAccountName'))]",
       "properties": {
         "publicAccess": "None"
@@ -232,7 +232,7 @@
     {
       "comments": "=== SERVICE BUS ===",
       "type": "Microsoft.ServiceBus/namespaces",
-      "apiVersion": "2023-01-01",
+      "apiVersion": "2022-10-01-preview",
       "name": "[variables('serviceBusNamespace')]",
       "location": "[parameters('location')]",
       "sku": {
@@ -246,7 +246,7 @@
     },
     {
       "type": "Microsoft.ServiceBus/namespaces/topics",
-      "apiVersion": "2023-01-01",
+      "apiVersion": "2022-10-01-preview",
       "name": "[format('{0}/prompt-intelligence', variables('serviceBusNamespace'))]",
       "properties": {
         "defaultMessageTimeToLive": "PT1H",
@@ -263,7 +263,7 @@
     },
     {
       "type": "Microsoft.ServiceBus/namespaces/topics/subscriptions",
-      "apiVersion": "2023-01-01",
+      "apiVersion": "2022-10-01-preview",
       "name": "[format('{0}/prompt-intelligence/financial-prompts', variables('serviceBusNamespace'))]",
       "properties": {
         "lockDuration": "PT5M",
@@ -279,7 +279,7 @@
     },
     {
       "type": "Microsoft.ServiceBus/namespaces/topics/subscriptions/rules",
-      "apiVersion": "2023-01-01",
+      "apiVersion": "2022-10-01-preview",
       "name": "[format('{0}/prompt-intelligence/financial-prompts/financial-filter', variables('serviceBusNamespace'))]",
       "properties": {
         "filterType": "SqlFilter",
@@ -297,7 +297,7 @@
     },
     {
       "type": "Microsoft.ServiceBus/namespaces/topics/subscriptions",
-      "apiVersion": "2023-01-01",
+      "apiVersion": "2022-10-01-preview",
       "name": "[format('{0}/prompt-intelligence/operational-prompts', variables('serviceBusNamespace'))]",
       "properties": {
         "lockDuration": "PT5M",
@@ -311,7 +311,7 @@
     },
     {
       "type": "Microsoft.ServiceBus/namespaces/topics/subscriptions/rules",
-      "apiVersion": "2023-01-01",
+      "apiVersion": "2022-10-01-preview",
       "name": "[format('{0}/prompt-intelligence/operational-prompts/operational-filter', variables('serviceBusNamespace'))]",
       "properties": {
         "filterType": "SqlFilter",
@@ -326,7 +326,7 @@
     },
     {
       "type": "Microsoft.ServiceBus/namespaces/queues",
-      "apiVersion": "2023-01-01",
+      "apiVersion": "2022-10-01-preview",
       "name": "[format('{0}/excel-processing-priority', variables('serviceBusNamespace'))]",
       "properties": {
         "lockDuration": "PT5M",
@@ -345,7 +345,7 @@
     },
     {
       "type": "Microsoft.ServiceBus/namespaces/queues",
-      "apiVersion": "2023-01-01",
+      "apiVersion": "2022-10-01-preview",
       "name": "[format('{0}/ai-processing-queue', variables('serviceBusNamespace'))]",
       "properties": {
         "lockDuration": "PT5M",
@@ -362,7 +362,7 @@
     },
     {
       "type": "Microsoft.ServiceBus/namespaces/queues",
-      "apiVersion": "2023-01-01",
+      "apiVersion": "2022-10-01-preview",
       "name": "[format('{0}/bottler-command-queue', variables('serviceBusNamespace'))]",
       "properties": {
         "lockDuration": "PT5M",
@@ -379,7 +379,7 @@
     },
     {
       "type": "Microsoft.ServiceBus/namespaces/queues",
-      "apiVersion": "2023-01-01",
+      "apiVersion": "2022-10-01-preview",
       "name": "[format('{0}/bottler-responses', variables('serviceBusNamespace'))]",
       "properties": {
         "lockDuration": "PT5M",
@@ -396,7 +396,7 @@
     },
     {
       "type": "Microsoft.ServiceBus/namespaces/queues",
-      "apiVersion": "2023-01-01",
+      "apiVersion": "2022-10-01-preview",
       "name": "[format('{0}/audit-log', variables('serviceBusNamespace'))]",
       "properties": {
         "lockDuration": "PT1M",
@@ -445,7 +445,7 @@
     {
       "comments": "=== LOG ANALYTICS ===",
       "type": "Microsoft.OperationalInsights/workspaces",
-      "apiVersion": "2023-05-01",
+      "apiVersion": "2023-09-01",
       "name": "[variables('logAnalyticsName')]",
       "location": "[parameters('location')]",
       "properties": {
