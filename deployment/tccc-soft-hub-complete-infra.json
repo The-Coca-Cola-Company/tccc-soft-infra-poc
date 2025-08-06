@@ -482,12 +482,10 @@
       "location": "[parameters('location')]",
       "sku": {
         "name": "Y1",
-        "tier": "Dynamic",
-        "size": "Y1",
-        "family": "Y"
+        "tier": "Dynamic"
       },
       "properties": {
-        "reserved": true
+        "reserved": false
       }
     },
     {
@@ -496,7 +494,7 @@
       "apiVersion": "2022-09-01",
       "name": "[variables('functionAppName')]",
       "location": "[parameters('location')]",
-      "kind": "functionapp,linux",
+      "kind": "functionapp",
       "identity": {
         "type": "SystemAssigned"
       },
@@ -505,143 +503,28 @@
         "siteConfig": {
           "appSettings": [
             {
-              "name": "AzureWebJobsStorage",
-              "value": "[format('DefaultEndpointsProtocol=https;AccountName={0};EndpointSuffix={1};AccountKey={2}', variables('storageAccountName'), environment().suffixes.storage, listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), '2023-04-01').keys[0].value)]"
-            },
-            {
-              "name": "WEBSITE_CONTENTAZUREFILECONNECTIONSTRING",
-              "value": "[format('DefaultEndpointsProtocol=https;AccountName={0};EndpointSuffix={1};AccountKey={2}', variables('storageAccountName'), environment().suffixes.storage, listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), '2023-04-01').keys[0].value)]"
-            },
-            {
-              "name": "WEBSITE_CONTENTSHARE",
-              "value": "[toLower(variables('functionAppName'))]"
+              "name": "FUNCTIONS_WORKER_RUNTIME",
+              "value": "python"
             },
             {
               "name": "FUNCTIONS_EXTENSION_VERSION",
               "value": "~4"
             },
             {
-              "name": "FUNCTIONS_WORKER_RUNTIME",
-              "value": "python"
-            },
-            {
               "name": "PYTHON_VERSION",
               "value": "3.11"
             },
             {
-              "name": "APPLICATIONINSIGHTS_CONNECTION_STRING",
-              "value": "[reference(resourceId('Microsoft.Insights/components', variables('appInsightsName')), '2020-02-02').ConnectionString]"
+              "name": "WEBSITE_CONTENTSHARE",
+              "value": "[toLower(variables('functionAppName'))]"
             },
             {
-              "name": "COSMOS_DB_CONNECTION_STRING",
-              "value": "[listConnectionStrings(resourceId('Microsoft.DocumentDB/databaseAccounts', variables('cosmosDbName')), '2023-11-15').connectionStrings[0].connectionString]"
-            },
-            {
-              "name": "COSMOS_DB_DATABASE_NAME",
-              "value": "TCCCHub"
-            },
-            {
-              "name": "SERVICE_BUS_CONNECTION_STRING",
-              "value": "[listKeys(resourceId('Microsoft.ServiceBus/namespaces/authorizationRules', variables('serviceBusNamespace'), 'RootManageSharedAccessKey'), '2022-10-01-preview').primaryConnectionString]"
-            },
-            {
-              "name": "SERVICE_BUS_TOPIC_PROMPT_INTELLIGENCE",
-              "value": "prompt-intelligence"
-            },
-            {
-              "name": "SERVICE_BUS_QUEUE_EXCEL_PRIORITY",
-              "value": "excel-processing-priority"
-            },
-            {
-              "name": "SERVICE_BUS_QUEUE_BOTTLER_RESPONSES",
-              "value": "bottler-responses"
-            },
-            {
-              "name": "SERVICE_BUS_SMART_RULES_ENABLED",
-              "value": "[string(parameters('enableServiceBusSmartRules'))]"
-            },
-            {
-              "name": "EVENT_GRID_TOPIC_ENDPOINT",
-              "value": "[reference(resourceId('Microsoft.EventGrid/topics', variables('eventGridTopic')), '2022-06-15').endpoint]"
-            },
-            {
-              "name": "EVENT_GRID_TOPIC_KEY",
-              "value": "[listKeys(resourceId('Microsoft.EventGrid/topics', variables('eventGridTopic')), '2022-06-15').key1]"
-            },
-            {
-              "name": "STORAGE_ACCOUNT_CONNECTION_STRING",
-              "value": "[format('DefaultEndpointsProtocol=https;AccountName={0};EndpointSuffix={1};AccountKey={2}', variables('storageAccountName'), environment().suffixes.storage, listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), '2023-04-01').keys[0].value)]"
-            },
-            {
-              "name": "BLOB_DEFAULT_CONTAINER",
-              "value": "agent-data"
-            },
-            {
-              "name": "AI_FOUNDRY_ENDPOINT",
-              "value": "[reference(resourceId('Microsoft.MachineLearningServices/workspaces', variables('aiHubName')), '2023-10-01').discoveryUrl]"
-            },
-            {
-              "name": "AZURE_AI_FOUNDRY_ENDPOINT",
-              "value": ""
-            },
-            {
-              "name": "AZURE_AI_FOUNDRY_KEY",
-              "value": ""
-            },
-            {
-              "name": "AZURE_AI_FOUNDRY_DEPLOYMENT",
-              "value": "tccc-model-router"
-            },
-            {
-              "name": "AZURE_AI_FOUNDRY_API_VERSION",
-              "value": "2024-12-01-preview"
-            },
-            {
-              "name": "AGENT_TYPE",
-              "value": "TCCC_HUB"
-            },
-            {
-              "name": "HUB_ROLE",
-              "value": "central_orchestrator"
-            },
-            {
-              "name": "MCP_COSMOS_URL",
-              "value": "http://localhost:8000"
-            },
-            {
-              "name": "MCP_BLOB_URL",
-              "value": "http://localhost:8001"
-            },
-            {
-              "name": "MCP_SERVICEBUS_URL",
-              "value": "http://localhost:8002"
-            },
-            {
-              "name": "MCP_AUTH_TOKEN",
-              "value": "[parameters('mcpAuthToken')]"
-            },
-            {
-              "name": "PARALLEL_PROCESSING_THRESHOLD",
-              "value": "3"
-            },
-            {
-              "name": "MAX_RETRY_ATTEMPTS",
-              "value": "3"
-            },
-            {
-              "name": "PROCESSING_TIMEOUT_SECONDS",
-              "value": "300"
+              "name": "AzureWebJobsStorage",
+              "value": "[format('DefaultEndpointsProtocol=https;AccountName={0};EndpointSuffix=core.windows.net;AccountKey={1}', variables('storageAccountName'), listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), '2023-04-01').keys[0].value)]"
             }
           ],
-          "use32BitWorkerProcess": false,
-          "linuxFxVersion": "Python|3.11",
-          "cors": {
-            "allowedOrigins": ["*"],
-            "supportCredentials": false
-          },
           "ftpsState": "Disabled",
           "minTlsVersion": "1.2",
-          "scmMinTlsVersion": "1.2",
           "http20Enabled": true
         },
         "httpsOnly": true,
@@ -649,12 +532,7 @@
       },
       "dependsOn": [
         "[resourceId('Microsoft.Web/serverfarms', variables('appServicePlanName'))]",
-        "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]",
-        "[resourceId('Microsoft.Insights/components', variables('appInsightsName'))]",
-        "[resourceId('Microsoft.DocumentDB/databaseAccounts', variables('cosmosDbName'))]",
-        "[resourceId('Microsoft.ServiceBus/namespaces', variables('serviceBusNamespace'))]",
-        "[resourceId('Microsoft.EventGrid/topics', variables('eventGridTopic'))]",
-        "[resourceId('Microsoft.MachineLearningServices/workspaces', variables('aiHubName'))]"
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
       ]
     },
     {
