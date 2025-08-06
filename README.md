@@ -37,7 +37,8 @@ The TCCC Hub is the **central orchestrator** that:
 
 Click the button below to deploy directly to Azure:
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FThe-Coca-Cola-Company%2Ftccc-hub-infrastructure%2Fmain%2Fdeployment%2Ftccc-soft-hub-complete-infra.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FThe-Coca-Cola-Company%2Ftccc-soft-infra-poc%2Fmain%2Fdeployment%2Ftccc-soft-hub-complete-infra.json)
+
 
 ### Option 2: Using Azure CLI
 
