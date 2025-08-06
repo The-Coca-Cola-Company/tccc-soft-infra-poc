@@ -1,0 +1,116 @@
+<policies>
+    <inbound>
+        <!-- Validate subscription key -->
+        <validate-header header-name="Ocp-Apim-Subscription-Key" failed-check-httpcode="401" failed-check-error-message="Access denied - invalid subscription key">
+            <value>@(context.Subscription.Key)</value>
+        </validate-header>
+        
+        <!-- Extract bottler identity from subscription -->
+        <set-variable name="bottlerId" value="@(context.Subscription.Name)" />
+        
+        <!-- Rate limiting per bottler -->
+        <rate-limit-by-key calls="100" renewal-period="60" counter-key="@(context.Variables.GetValueOrDefault<string>("bottlerId"))" />
+        
+        <!-- Quota per bottler -->
+        <quota-by-key calls="10000" renewal-period="86400" counter-key="@(context.Variables.GetValueOrDefault<string>("bottlerId"))" />
+        
+        <!-- Add bottler identity headers -->
+        <set-header name="X-Bottler-ID" exists-action="override">
+            <value>@(context.Variables.GetValueOrDefault<string>("bottlerId"))</value>
+        </set-header>
+        
+        <!-- Log request -->
+        <log-to-eventhub logger-id="bottler-requests">
+            @{
+                return new JObject(
+                    new JProperty("EventTime", DateTime.UtcNow.ToString()),
+                    new JProperty("BottlerId", context.Variables.GetValueOrDefault<string>("bottlerId")),
+                    new JProperty("OperationName", context.Operation.Name),
+                    new JProperty("RequestId", context.RequestId),
+                    new JProperty("IpAddress", context.Request.IpAddress)
+                ).ToString();
+            }
+        </log-to-eventhub>
+        
+        <!-- Validate hub-spoke pattern -->
+        <choose>
+            <when condition="@(context.Request.Headers.GetValueOrDefault("X-Target-Bottler","") != "" && context.Request.Headers.GetValueOrDefault("X-Target-Bottler","") != context.Variables.GetValueOrDefault<string>("bottlerId"))">
+                <return-response>
+                    <set-status code="403" reason="Forbidden" />
+                    <set-body>{"error": "Hub-Spoke violation: Direct bottler-to-bottler communication is not allowed"}</set-body>
+                </return-response>
+            </when>
+        </choose>
+        
+        <!-- Add security headers -->
+        <set-header name="X-Content-Type-Options" exists-action="override">
+            <value>nosniff</value>
+        </set-header>
+        <set-header name="X-Frame-Options" exists-action="override">
+            <value>DENY</value>
+        </set-header>
+        <set-header name="X-XSS-Protection" exists-action="override">
+            <value>1; mode=block</value>
+        </set-header>
+        
+        <!-- Cache lookup for read operations -->
+        <cache-lookup vary-by-developer="false" vary-by-developer-groups="false" downstream-caching-type="none">
+            <vary-by-header>X-Bottler-ID</vary-by-header>
+            <vary-by-query-parameter>*</vary-by-query-parameter>
+        </cache-lookup>
+    </inbound>
+    
+    <backend>
+        <!-- Forward to backend Function App -->
+        <forward-request timeout="30" />
+    </backend>
+    
+    <outbound>
+        <!-- Cache store for read operations -->
+        <cache-store duration="300" />
+        
+        <!-- Remove internal headers -->
+        <set-header name="X-AspNet-Version" exists-action="delete" />
+        <set-header name="X-Powered-By" exists-action="delete" />
+        
+        <!-- Add response headers -->
+        <set-header name="X-Response-Time" exists-action="override">
+            <value>@(DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss"))</value>
+        </set-header>
+        
+        <!-- Log response -->
+        <log-to-eventhub logger-id="bottler-responses">
+            @{
+                return new JObject(
+                    new JProperty("EventTime", DateTime.UtcNow.ToString()),
+                    new JProperty("BottlerId", context.Variables.GetValueOrDefault<string>("bottlerId")),
+                    new JProperty("RequestId", context.RequestId),
+                    new JProperty("ResponseCode", context.Response.StatusCode),
+                    new JProperty("Duration", context.Elapsed.TotalMilliseconds)
+                ).ToString();
+            }
+        </log-to-eventhub>
+    </outbound>
+    
+    <on-error>
+        <!-- Log errors -->
+        <log-to-eventhub logger-id="bottler-errors">
+            @{
+                return new JObject(
+                    new JProperty("EventTime", DateTime.UtcNow.ToString()),
+                    new JProperty("BottlerId", context.Variables.GetValueOrDefault<string>("bottlerId", "unknown")),
+                    new JProperty("RequestId", context.RequestId),
+                    new JProperty("Source", context.LastError.Source),
+                    new JProperty("Reason", context.LastError.Reason),
+                    new JProperty("Message", context.LastError.Message)
+                ).ToString();
+            }
+        </log-to-eventhub>
+        
+        <!-- Return sanitized error -->
+        <return-response>
+            <set-status code="500" reason="Internal Server Error" />
+            <set-body>{"error": "An error occurred processing your request", "requestId": "@(context.RequestId)"}</set-body>
+        </return-response>
+    </on-error>
+</policies>
