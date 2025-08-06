@@ -22,10 +22,10 @@
     },
     "apiManagementSku": {
       "type": "string",
-      "defaultValue": "Developer",
-      "allowedValues": ["Developer", "Premium"],
+      "defaultValue": "Basic",
+      "allowedValues": ["Basic", "Premium"],
       "metadata": {
-        "description": "API Management SKU (Premium required for Private Link)"
+        "description": "API Management SKU (Basic or Premium required for MCP support)"
       }
     },
     "publisherEmail": {
