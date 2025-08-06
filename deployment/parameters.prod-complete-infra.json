@@ -1,0 +1,29 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "environment": {
+      "value": "prod"
+    },
+    "location": {
+      "value": "eastus"
+    },
+    "apiManagementSku": {
+      "value": "Premium"
+    },
+    "publisherEmail": {
+      "value": "tccc-hub-admin@coca-cola.com"
+    },
+    "publisherName": {
+      "value": "The Coca-Cola Company"
+    },
+    "mcpAuthToken": {
+      "reference": {
+        "description": "Store this value in GitHub Secrets or Azure DevOps secure variables"
+      }
+    },
+    "enableServiceBusSmartRules": {
+      "value": true
+    }
+  }
+}

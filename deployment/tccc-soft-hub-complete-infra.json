@@ -1,0 +1,723 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "4.1.0.0",
+  "metadata": {
+    "description": "🚀 TCCC Soft Hub Complete Deployment - NO KEY VAULT - MCP Integration + Service Bus Smart Rules"
+  },
+  "parameters": {
+    "environment": {
+      "type": "string",
+      "defaultValue": "dev",
+      "allowedValues": ["dev", "test", "prod"],
+      "metadata": {
+        "description": "Environment name"
+      }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Azure region for all resources"
+      }
+    },
+    "apiManagementSku": {
+      "type": "string",
+      "defaultValue": "Developer",
+      "allowedValues": ["Developer", "Premium"],
+      "metadata": {
+        "description": "API Management SKU (Premium required for Private Link)"
+      }
+    },
+    "publisherEmail": {
+      "type": "string",
+      "metadata": {
+        "description": "Email address for API Management publisher"
+      }
+    },
+    "publisherName": {
+      "type": "string",
+      "defaultValue": "The Coca-Cola Company",
+      "metadata": {
+        "description": "Organization name for API Management"
+      }
+    },
+    "mcpAuthToken": {
+      "type": "securestring",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Authentication token for MCP servers (set via parameter file or deployment command)"
+      }
+    },
+    "enableServiceBusSmartRules": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Enable Service Bus smart routing rules"
+      }
+    }
+  },
+  "variables": {
+    "uniqueSuffix": "[substring(uniqueString(resourceGroup().id), 0, 6)]",
+    "baseName": "tccc-soft",
+    "resourcePrefix": "[format('{0}-{1}', variables('baseName'), parameters('environment'))]",
+    
+    "functionAppName": "[format('{0}-func-{1}', variables('resourcePrefix'), variables('uniqueSuffix'))]",
+    "appServicePlanName": "[format('{0}-asp-{1}', variables('resourcePrefix'), variables('uniqueSuffix'))]",
+    "storageAccountName": "[toLower(format('{0}st{1}', replace(variables('resourcePrefix'), '-', ''), variables('uniqueSuffix')))]",
+    "appInsightsName": "[format('{0}-ai-{1}', variables('resourcePrefix'), variables('uniqueSuffix'))]",
+    "logAnalyticsName": "[format('{0}-law-{1}', variables('resourcePrefix'), variables('uniqueSuffix'))]",
+    
+    "cosmosDbName": "[format('{0}-cosmos-{1}', variables('resourcePrefix'), variables('uniqueSuffix'))]",
+    "serviceBusNamespace": "[format('{0}-sb-{1}', variables('resourcePrefix'), variables('uniqueSuffix'))]",
+    "eventGridTopic": "[format('{0}-eg-{1}', variables('resourcePrefix'), variables('uniqueSuffix'))]",
+    "aiHubName": "[format('{0}-aihub-{1}', variables('resourcePrefix'), variables('uniqueSuffix'))]",
+    
+    "apiManagementName": "[format('{0}-apim-{1}', variables('resourcePrefix'), variables('uniqueSuffix'))]",
+    
+    "smartRules": {
+      "priorityMapping": {
+        "urgent": "P1",
+        "high": "P2",
+        "normal": "P3",
+        "low": "P4"
+      },
+      "timeWindows": {
+        "businessHours": "Mon-Fri 8:00-18:00",
+        "afterHours": "Mon-Fri 18:00-8:00",
+        "weekend": "Sat-Sun"
+      }
+    }
+  },
+  "resources": [
+    {
+      "comments": "=== STORAGE ===",
+      "type": "Microsoft.Storage/storageAccounts",
+      "apiVersion": "2023-05-01",
+      "name": "[variables('storageAccountName')]",
+      "location": "[parameters('location')]",
+      "sku": {
+        "name": "Standard_LRS"
+      },
+      "kind": "StorageV2",
+      "properties": {
+        "supportsHttpsTrafficOnly": true,
+        "minimumTlsVersion": "TLS1_2",
+        "allowBlobPublicAccess": false,
+        "networkAcls": {
+          "defaultAction": "Allow",
+          "bypass": "AzureServices"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts/blobServices",
+      "apiVersion": "2023-05-01",
+      "name": "[format('{0}/default', variables('storageAccountName'))]",
+      "properties": {
+        "cors": {
+          "corsRules": []
+        },
+        "deleteRetentionPolicy": {
+          "enabled": true,
+          "days": 7
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+      "apiVersion": "2023-05-01",
+      "name": "[format('{0}/default/agent-data', variables('storageAccountName'))]",
+      "properties": {
+        "publicAccess": "None"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts/blobServices', variables('storageAccountName'), 'default')]"
+      ]
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+      "apiVersion": "2023-05-01",
+      "name": "[format('{0}/default/excel-uploads', variables('storageAccountName'))]",
+      "properties": {
+        "publicAccess": "None"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts/blobServices', variables('storageAccountName'), 'default')]"
+      ]
+    },
+    {
+      "comments": "=== COSMOS DB ===",
+      "type": "Microsoft.DocumentDB/databaseAccounts",
+      "apiVersion": "2024-05-15",
+      "name": "[variables('cosmosDbName')]",
+      "location": "[parameters('location')]",
+      "kind": "GlobalDocumentDB",
+      "properties": {
+        "consistencyPolicy": {
+          "defaultConsistencyLevel": "Session"
+        },
+        "locations": [
+          {
+            "locationName": "[parameters('location')]",
+            "failoverPriority": 0,
+            "isZoneRedundant": false
+          }
+        ],
+        "databaseAccountOfferType": "Standard",
+        "enableAutomaticFailover": false,
+        "publicNetworkAccess": "Disabled",
+        "analyticalStorageConfiguration": {
+          "schemaType": "WellDefined"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.DocumentDB/databaseAccounts/sqlDatabases",
+      "apiVersion": "2024-05-15",
+      "name": "[format('{0}/TCCCHub', variables('cosmosDbName'))]",
+      "properties": {
+        "resource": {
+          "id": "TCCCHub"
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.DocumentDB/databaseAccounts', variables('cosmosDbName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers",
+      "apiVersion": "2024-05-15",
+      "name": "[format('{0}/TCCCHub/agent-registry', variables('cosmosDbName'))]",
+      "properties": {
+        "resource": {
+          "id": "agent-registry",
+          "partitionKey": {
+            "paths": ["/agentId"],
+            "kind": "Hash"
+          },
+          "indexingPolicy": {
+            "automatic": true,
+            "indexingMode": "Consistent"
+          }
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.DocumentDB/databaseAccounts/sqlDatabases', variables('cosmosDbName'), 'TCCCHub')]"
+      ]
+    },
+    {
+      "type": "Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers",
+      "apiVersion": "2024-05-15",
+      "name": "[format('{0}/TCCCHub/prompt-intelligence', variables('cosmosDbName'))]",
+      "properties": {
+        "resource": {
+          "id": "prompt-intelligence",
+          "partitionKey": {
+            "paths": ["/bottlerId"],
+            "kind": "Hash"
+          },
+          "indexingPolicy": {
+            "automatic": true,
+            "indexingMode": "Consistent"
+          }
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.DocumentDB/databaseAccounts/sqlDatabases', variables('cosmosDbName'), 'TCCCHub')]"
+      ]
+    },
+    {
+      "comments": "=== SERVICE BUS ===",
+      "type": "Microsoft.ServiceBus/namespaces",
+      "apiVersion": "2023-01-01",
+      "name": "[variables('serviceBusNamespace')]",
+      "location": "[parameters('location')]",
+      "sku": {
+        "name": "Standard",
+        "tier": "Standard"
+      },
+      "properties": {
+        "minimumTlsVersion": "1.2",
+        "publicNetworkAccess": "Disabled"
+      }
+    },
+    {
+      "type": "Microsoft.ServiceBus/namespaces/topics",
+      "apiVersion": "2023-01-01",
+      "name": "[format('{0}/prompt-intelligence', variables('serviceBusNamespace'))]",
+      "properties": {
+        "defaultMessageTimeToLive": "PT1H",
+        "maxSizeInMegabytes": 1024,
+        "requiresDuplicateDetection": true,
+        "duplicateDetectionHistoryTimeWindow": "PT10M",
+        "enableBatchedOperations": true,
+        "enablePartitioning": false,
+        "enableExpress": false
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.ServiceBus/namespaces', variables('serviceBusNamespace'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.ServiceBus/namespaces/topics/subscriptions",
+      "apiVersion": "2023-01-01",
+      "name": "[format('{0}/prompt-intelligence/financial-prompts', variables('serviceBusNamespace'))]",
+      "properties": {
+        "lockDuration": "PT5M",
+        "defaultMessageTimeToLive": "PT1H",
+        "deadLetteringOnMessageExpiration": true,
+        "deadLetteringOnFilterEvaluationExceptions": true,
+        "maxDeliveryCount": 3,
+        "enableBatchedOperations": true
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.ServiceBus/namespaces/topics', variables('serviceBusNamespace'), 'prompt-intelligence')]"
+      ]
+    },
+    {
+      "type": "Microsoft.ServiceBus/namespaces/topics/subscriptions/rules",
+      "apiVersion": "2023-01-01",
+      "name": "[format('{0}/prompt-intelligence/financial-prompts/financial-filter', variables('serviceBusNamespace'))]",
+      "properties": {
+        "filterType": "SqlFilter",
+        "sqlFilter": {
+          "sqlExpression": "domain = 'financial' OR (query_type = 'revenue' AND amount > 1000000)",
+          "requiresPreprocessing": false
+        },
+        "action": {
+          "sqlExpression": "SET Priority = 'P1'"
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.ServiceBus/namespaces/topics/subscriptions', variables('serviceBusNamespace'), 'prompt-intelligence', 'financial-prompts')]"
+      ]
+    },
+    {
+      "type": "Microsoft.ServiceBus/namespaces/topics/subscriptions",
+      "apiVersion": "2023-01-01",
+      "name": "[format('{0}/prompt-intelligence/operational-prompts', variables('serviceBusNamespace'))]",
+      "properties": {
+        "lockDuration": "PT5M",
+        "defaultMessageTimeToLive": "PT1H",
+        "deadLetteringOnMessageExpiration": true,
+        "maxDeliveryCount": 3
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.ServiceBus/namespaces/topics', variables('serviceBusNamespace'), 'prompt-intelligence')]"
+      ]
+    },
+    {
+      "type": "Microsoft.ServiceBus/namespaces/topics/subscriptions/rules",
+      "apiVersion": "2023-01-01",
+      "name": "[format('{0}/prompt-intelligence/operational-prompts/operational-filter', variables('serviceBusNamespace'))]",
+      "properties": {
+        "filterType": "SqlFilter",
+        "sqlFilter": {
+          "sqlExpression": "domain = 'operational' OR query_type = 'inventory'",
+          "requiresPreprocessing": false
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.ServiceBus/namespaces/topics/subscriptions', variables('serviceBusNamespace'), 'prompt-intelligence', 'operational-prompts')]"
+      ]
+    },
+    {
+      "type": "Microsoft.ServiceBus/namespaces/queues",
+      "apiVersion": "2023-01-01",
+      "name": "[format('{0}/excel-processing-priority', variables('serviceBusNamespace'))]",
+      "properties": {
+        "lockDuration": "PT5M",
+        "maxSizeInMegabytes": 5120,
+        "requiresDuplicateDetection": true,
+        "duplicateDetectionHistoryTimeWindow": "PT1H",
+        "defaultMessageTimeToLive": "PT24H",
+        "deadLetteringOnMessageExpiration": true,
+        "maxDeliveryCount": 3,
+        "enablePartitioning": true,
+        "enableBatchedOperations": true
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.ServiceBus/namespaces', variables('serviceBusNamespace'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.ServiceBus/namespaces/queues",
+      "apiVersion": "2023-01-01",
+      "name": "[format('{0}/ai-processing-queue', variables('serviceBusNamespace'))]",
+      "properties": {
+        "lockDuration": "PT5M",
+        "maxSizeInMegabytes": 1024,
+        "requiresSession": true,
+        "defaultMessageTimeToLive": "PT1H",
+        "deadLetteringOnMessageExpiration": true,
+        "maxDeliveryCount": 3,
+        "enablePartitioning": false
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.ServiceBus/namespaces', variables('serviceBusNamespace'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.ServiceBus/namespaces/queues",
+      "apiVersion": "2023-01-01",
+      "name": "[format('{0}/bottler-command-queue', variables('serviceBusNamespace'))]",
+      "properties": {
+        "lockDuration": "PT5M",
+        "maxSizeInMegabytes": 1024,
+        "defaultMessageTimeToLive": "PT1H",
+        "deadLetteringOnMessageExpiration": true,
+        "maxDeliveryCount": 3,
+        "enablePartitioning": false,
+        "enableBatchedOperations": true
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.ServiceBus/namespaces', variables('serviceBusNamespace'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.ServiceBus/namespaces/queues",
+      "apiVersion": "2023-01-01",
+      "name": "[format('{0}/bottler-responses', variables('serviceBusNamespace'))]",
+      "properties": {
+        "lockDuration": "PT5M",
+        "maxSizeInMegabytes": 1024,
+        "defaultMessageTimeToLive": "P1D",
+        "deadLetteringOnMessageExpiration": true,
+        "maxDeliveryCount": 3,
+        "enablePartitioning": true,
+        "enableBatchedOperations": true
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.ServiceBus/namespaces', variables('serviceBusNamespace'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.ServiceBus/namespaces/queues",
+      "apiVersion": "2023-01-01",
+      "name": "[format('{0}/audit-log', variables('serviceBusNamespace'))]",
+      "properties": {
+        "lockDuration": "PT1M",
+        "maxSizeInMegabytes": 5120,
+        "defaultMessageTimeToLive": "P30D",
+        "enablePartitioning": true,
+        "status": "Active"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.ServiceBus/namespaces', variables('serviceBusNamespace'))]"
+      ]
+    },
+    {
+      "comments": "=== EVENT GRID ===",
+      "type": "Microsoft.EventGrid/topics",
+      "apiVersion": "2023-12-15-preview",
+      "name": "[variables('eventGridTopic')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "inputSchema": "EventGridSchema",
+        "publicNetworkAccess": "Disabled"
+      }
+    },
+    {
+      "comments": "=== AZURE AI FOUNDRY HUB ===",
+      "type": "Microsoft.MachineLearningServices/workspaces",
+      "apiVersion": "2024-04-01",
+      "name": "[variables('aiHubName')]",
+      "location": "[parameters('location')]",
+      "kind": "hub",
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "properties": {
+        "friendlyName": "TCCC AI Foundry Hub",
+        "description": "Central AI Foundry orchestration hub for TCCC",
+        "storageAccount": "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]",
+        "applicationInsights": "[resourceId('Microsoft.Insights/components', variables('appInsightsName'))]",
+        "publicNetworkAccess": "Enabled"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]",
+        "[resourceId('Microsoft.Insights/components', variables('appInsightsName'))]"
+      ]
+    },
+    {
+      "comments": "=== LOG ANALYTICS ===",
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2023-05-01",
+      "name": "[variables('logAnalyticsName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "sku": {
+          "name": "PerGB2018"
+        },
+        "retentionInDays": 30,
+        "publicNetworkAccessForIngestion": "Enabled",
+        "publicNetworkAccessForQuery": "Enabled"
+      }
+    },
+    {
+      "comments": "=== APPLICATION INSIGHTS ===",
+      "type": "Microsoft.Insights/components",
+      "apiVersion": "2020-02-02",
+      "name": "[variables('appInsightsName')]",
+      "location": "[parameters('location')]",
+      "kind": "web",
+      "properties": {
+        "Application_Type": "web",
+        "WorkspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', variables('logAnalyticsName'))]",
+        "publicNetworkAccessForIngestion": "Enabled",
+        "publicNetworkAccessForQuery": "Enabled"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.OperationalInsights/workspaces', variables('logAnalyticsName'))]"
+      ]
+    },
+    {
+      "comments": "=== APP SERVICE PLAN ===",
+      "type": "Microsoft.Web/serverfarms",
+      "apiVersion": "2023-12-01",
+      "name": "[variables('appServicePlanName')]",
+      "location": "[parameters('location')]",
+      "sku": {
+        "name": "Y1",
+        "tier": "Dynamic",
+        "size": "Y1",
+        "family": "Y"
+      },
+      "properties": {
+        "reserved": true
+      }
+    },
+    {
+      "comments": "=== FUNCTION APP ===",
+      "type": "Microsoft.Web/sites",
+      "apiVersion": "2023-12-01",
+      "name": "[variables('functionAppName')]",
+      "location": "[parameters('location')]",
+      "kind": "functionapp,linux",
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "properties": {
+        "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('appServicePlanName'))]",
+        "siteConfig": {
+          "appSettings": [
+            {
+              "name": "AzureWebJobsStorage",
+              "value": "[format('DefaultEndpointsProtocol=https;AccountName={0};EndpointSuffix={1};AccountKey={2}', variables('storageAccountName'), environment().suffixes.storage, listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), '2023-04-01').keys[0].value)]"
+            },
+            {
+              "name": "WEBSITE_CONTENTAZUREFILECONNECTIONSTRING",
+              "value": "[format('DefaultEndpointsProtocol=https;AccountName={0};EndpointSuffix={1};AccountKey={2}', variables('storageAccountName'), environment().suffixes.storage, listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), '2023-04-01').keys[0].value)]"
+            },
+            {
+              "name": "WEBSITE_CONTENTSHARE",
+              "value": "[toLower(variables('functionAppName'))]"
+            },
+            {
+              "name": "FUNCTIONS_EXTENSION_VERSION",
+              "value": "~4"
+            },
+            {
+              "name": "FUNCTIONS_WORKER_RUNTIME",
+              "value": "python"
+            },
+            {
+              "name": "PYTHON_VERSION",
+              "value": "3.11"
+            },
+            {
+              "name": "APPLICATIONINSIGHTS_CONNECTION_STRING",
+              "value": "[reference(resourceId('Microsoft.Insights/components', variables('appInsightsName')), '2020-02-02').ConnectionString]"
+            },
+            {
+              "name": "COSMOS_DB_CONNECTION_STRING",
+              "value": "[listConnectionStrings(resourceId('Microsoft.DocumentDB/databaseAccounts', variables('cosmosDbName')), '2023-11-15').connectionStrings[0].connectionString]"
+            },
+            {
+              "name": "COSMOS_DB_DATABASE_NAME",
+              "value": "TCCCHub"
+            },
+            {
+              "name": "SERVICE_BUS_CONNECTION_STRING",
+              "value": "[listKeys(resourceId('Microsoft.ServiceBus/namespaces/authorizationRules', variables('serviceBusNamespace'), 'RootManageSharedAccessKey'), '2022-10-01-preview').primaryConnectionString]"
+            },
+            {
+              "name": "SERVICE_BUS_TOPIC_PROMPT_INTELLIGENCE",
+              "value": "prompt-intelligence"
+            },
+            {
+              "name": "SERVICE_BUS_QUEUE_EXCEL_PRIORITY",
+              "value": "excel-processing-priority"
+            },
+            {
+              "name": "SERVICE_BUS_QUEUE_BOTTLER_RESPONSES",
+              "value": "bottler-responses"
+            },
+            {
+              "name": "SERVICE_BUS_SMART_RULES_ENABLED",
+              "value": "[string(parameters('enableServiceBusSmartRules'))]"
+            },
+            {
+              "name": "EVENT_GRID_TOPIC_ENDPOINT",
+              "value": "[reference(resourceId('Microsoft.EventGrid/topics', variables('eventGridTopic')), '2022-06-15').endpoint]"
+            },
+            {
+              "name": "EVENT_GRID_TOPIC_KEY",
+              "value": "[listKeys(resourceId('Microsoft.EventGrid/topics', variables('eventGridTopic')), '2022-06-15').key1]"
+            },
+            {
+              "name": "STORAGE_ACCOUNT_CONNECTION_STRING",
+              "value": "[format('DefaultEndpointsProtocol=https;AccountName={0};EndpointSuffix={1};AccountKey={2}', variables('storageAccountName'), environment().suffixes.storage, listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), '2023-04-01').keys[0].value)]"
+            },
+            {
+              "name": "BLOB_DEFAULT_CONTAINER",
+              "value": "agent-data"
+            },
+            {
+              "name": "AI_FOUNDRY_ENDPOINT",
+              "value": "[reference(resourceId('Microsoft.MachineLearningServices/workspaces', variables('aiHubName')), '2024-04-01').discoveryUrl]"
+            },
+            {
+              "name": "AZURE_AI_FOUNDRY_ENDPOINT",
+              "value": ""
+            },
+            {
+              "name": "AZURE_AI_FOUNDRY_KEY",
+              "value": ""
+            },
+            {
+              "name": "AZURE_AI_FOUNDRY_DEPLOYMENT",
+              "value": "tccc-model-router"
+            },
+            {
+              "name": "AZURE_AI_FOUNDRY_API_VERSION",
+              "value": "2024-12-01-preview"
+            },
+            {
+              "name": "AGENT_TYPE",
+              "value": "TCCC_HUB"
+            },
+            {
+              "name": "HUB_ROLE",
+              "value": "central_orchestrator"
+            },
+            {
+              "name": "MCP_COSMOS_URL",
+              "value": "http://localhost:8000"
+            },
+            {
+              "name": "MCP_BLOB_URL",
+              "value": "http://localhost:8001"
+            },
+            {
+              "name": "MCP_SERVICEBUS_URL",
+              "value": "http://localhost:8002"
+            },
+            {
+              "name": "MCP_AUTH_TOKEN",
+              "value": "[parameters('mcpAuthToken')]"
+            },
+            {
+              "name": "PARALLEL_PROCESSING_THRESHOLD",
+              "value": "3"
+            },
+            {
+              "name": "MAX_RETRY_ATTEMPTS",
+              "value": "3"
+            },
+            {
+              "name": "PROCESSING_TIMEOUT_SECONDS",
+              "value": "300"
+            }
+          ],
+          "use32BitWorkerProcess": false,
+          "linuxFxVersion": "Python|3.11",
+          "cors": {
+            "allowedOrigins": ["*"],
+            "supportCredentials": false
+          },
+          "ftpsState": "Disabled",
+          "minTlsVersion": "1.2",
+          "scmMinTlsVersion": "1.2",
+          "http20Enabled": true
+        },
+        "httpsOnly": true,
+        "publicNetworkAccess": "Enabled"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/serverfarms', variables('appServicePlanName'))]",
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]",
+        "[resourceId('Microsoft.Insights/components', variables('appInsightsName'))]",
+        "[resourceId('Microsoft.DocumentDB/databaseAccounts', variables('cosmosDbName'))]",
+        "[resourceId('Microsoft.ServiceBus/namespaces', variables('serviceBusNamespace'))]",
+        "[resourceId('Microsoft.EventGrid/topics', variables('eventGridTopic'))]",
+        "[resourceId('Microsoft.MachineLearningServices/workspaces', variables('aiHubName'))]"
+      ]
+    },
+    {
+      "comments": "=== API MANAGEMENT ===",
+      "type": "Microsoft.ApiManagement/service",
+      "apiVersion": "2023-09-01-preview",
+      "name": "[variables('apiManagementName')]",
+      "location": "[parameters('location')]",
+      "sku": {
+        "name": "[parameters('apiManagementSku')]",
+        "capacity": 1
+      },
+      "properties": {
+        "publisherEmail": "[parameters('publisherEmail')]",
+        "publisherName": "[parameters('publisherName')]",
+        "virtualNetworkType": "None",
+        "customProperties": {
+          "Microsoft.WindowsAzure.ApiManagement.Gateway.Security.Protocols.Tls11": "false",
+          "Microsoft.WindowsAzure.ApiManagement.Gateway.Security.Protocols.Tls10": "false",
+          "Microsoft.WindowsAzure.ApiManagement.Gateway.Security.Backend.Protocols.Tls11": "false",
+          "Microsoft.WindowsAzure.ApiManagement.Gateway.Security.Backend.Protocols.Tls10": "false",
+          "Microsoft.WindowsAzure.ApiManagement.Gateway.Security.Backend.Protocols.Ssl30": "false",
+          "Microsoft.WindowsAzure.ApiManagement.Gateway.Protocols.Server.Http2": "true"
+        }
+      }
+    }
+  ],
+  "outputs": {
+    "functionAppName": {
+      "type": "string",
+      "value": "[variables('functionAppName')]"
+    },
+    "functionAppUrl": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Web/sites', variables('functionAppName')), '2023-12-01').defaultHostName]"
+    },
+    "apiManagementName": {
+      "type": "string",
+      "value": "[variables('apiManagementName')]"
+    },
+    "apiManagementGatewayUrl": {
+      "type": "string",
+      "value": "[format('https://{0}.azure-api.net', variables('apiManagementName'))]"
+    },
+    "cosmosDbName": {
+      "type": "string",
+      "value": "[variables('cosmosDbName')]"
+    },
+    "serviceBusNamespace": {
+      "type": "string",
+      "value": "[variables('serviceBusNamespace')]"
+    },
+    "storageAccountName": {
+      "type": "string",
+      "value": "[variables('storageAccountName')]"
+    },
+    "eventGridTopicName": {
+      "type": "string",
+      "value": "[variables('eventGridTopic')]"
+    },
+    "aiHubName": {
+      "type": "string",
+      "value": "[variables('aiHubName')]"
+    }
+  }
+}
