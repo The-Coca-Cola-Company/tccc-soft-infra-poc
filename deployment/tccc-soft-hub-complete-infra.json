@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-  "contentVersion": "4.1.1.0",
+  "contentVersion": "4.2.0.0",
   "metadata": {
     "description": "🚀 TCCC Soft Hub Complete Deployment - NO KEY VAULT - MCP Integration + Service Bus Smart Rules"
   },
@@ -92,7 +92,7 @@
     {
       "comments": "=== STORAGE ===",
       "type": "Microsoft.Storage/storageAccounts",
-      "apiVersion": "2022-10-01",
+      "apiVersion": "2023-04-01",
       "name": "[variables('storageAccountName')]",
       "location": "[parameters('location')]",
       "sku": {
@@ -111,7 +111,7 @@
     },
     {
       "type": "Microsoft.Storage/storageAccounts/blobServices",
-      "apiVersion": "2022-10-01",
+      "apiVersion": "2023-04-01",
       "name": "[format('{0}/default', variables('storageAccountName'))]",
       "properties": {
         "cors": {
@@ -128,7 +128,7 @@
     },
     {
       "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
-      "apiVersion": "2022-10-01",
+      "apiVersion": "2023-04-01",
       "name": "[format('{0}/default/agent-data', variables('storageAccountName'))]",
       "properties": {
         "publicAccess": "None"
@@ -139,7 +139,7 @@
     },
     {
       "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
-      "apiVersion": "2022-10-01",
+      "apiVersion": "2023-04-01",
       "name": "[format('{0}/default/excel-uploads', variables('storageAccountName'))]",
       "properties": {
         "publicAccess": "None"
@@ -151,7 +151,7 @@
     {
       "comments": "=== COSMOS DB ===",
       "type": "Microsoft.DocumentDB/databaseAccounts",
-      "apiVersion": "2024-05-15",
+      "apiVersion": "2023-11-15",
       "name": "[variables('cosmosDbName')]",
       "location": "[parameters('location')]",
       "kind": "GlobalDocumentDB",
@@ -176,7 +176,7 @@
     },
     {
       "type": "Microsoft.DocumentDB/databaseAccounts/sqlDatabases",
-      "apiVersion": "2024-05-15",
+      "apiVersion": "2023-11-15",
       "name": "[format('{0}/TCCCHub', variables('cosmosDbName'))]",
       "properties": {
         "resource": {
@@ -189,7 +189,7 @@
     },
     {
       "type": "Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers",
-      "apiVersion": "2024-05-15",
+      "apiVersion": "2023-11-15",
       "name": "[format('{0}/TCCCHub/agent-registry', variables('cosmosDbName'))]",
       "properties": {
         "resource": {
@@ -210,7 +210,7 @@
     },
     {
       "type": "Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers",
-      "apiVersion": "2024-05-15",
+      "apiVersion": "2023-11-15",
       "name": "[format('{0}/TCCCHub/prompt-intelligence', variables('cosmosDbName'))]",
       "properties": {
         "resource": {
@@ -412,7 +412,7 @@
     {
       "comments": "=== EVENT GRID ===",
       "type": "Microsoft.EventGrid/topics",
-      "apiVersion": "2023-12-15-preview",
+      "apiVersion": "2022-06-15",
       "name": "[variables('eventGridTopic')]",
       "location": "[parameters('location')]",
       "properties": {
@@ -423,7 +423,7 @@
     {
       "comments": "=== AZURE AI FOUNDRY HUB ===",
       "type": "Microsoft.MachineLearningServices/workspaces",
-      "apiVersion": "2024-04-01",
+      "apiVersion": "2023-10-01",
       "name": "[variables('aiHubName')]",
       "location": "[parameters('location')]",
       "kind": "hub",
@@ -445,7 +445,7 @@
     {
       "comments": "=== LOG ANALYTICS ===",
       "type": "Microsoft.OperationalInsights/workspaces",
-      "apiVersion": "2023-09-01",
+      "apiVersion": "2022-10-01",
       "name": "[variables('logAnalyticsName')]",
       "location": "[parameters('location')]",
       "properties": {
@@ -477,7 +477,7 @@
     {
       "comments": "=== APP SERVICE PLAN ===",
       "type": "Microsoft.Web/serverfarms",
-      "apiVersion": "2023-12-01",
+      "apiVersion": "2022-09-01",
       "name": "[variables('appServicePlanName')]",
       "location": "[parameters('location')]",
       "sku": {
@@ -493,7 +493,7 @@
     {
       "comments": "=== FUNCTION APP ===",
       "type": "Microsoft.Web/sites",
-      "apiVersion": "2023-12-01",
+      "apiVersion": "2022-09-01",
       "name": "[variables('functionAppName')]",
       "location": "[parameters('location')]",
       "kind": "functionapp,linux",
@@ -578,7 +578,7 @@
             },
             {
               "name": "AI_FOUNDRY_ENDPOINT",
-              "value": "[reference(resourceId('Microsoft.MachineLearningServices/workspaces', variables('aiHubName')), '2024-04-01').discoveryUrl]"
+              "value": "[reference(resourceId('Microsoft.MachineLearningServices/workspaces', variables('aiHubName')), '2023-10-01').discoveryUrl]"
             },
             {
               "name": "AZURE_AI_FOUNDRY_ENDPOINT",
@@ -689,7 +689,7 @@
     },
     "functionAppUrl": {
       "type": "string",
-      "value": "[reference(resourceId('Microsoft.Web/sites', variables('functionAppName')), '2023-12-01').defaultHostName]"
+      "value": "[reference(resourceId('Microsoft.Web/sites', variables('functionAppName')), '2022-09-01').defaultHostName]"
     },
     "apiManagementName": {
       "type": "string",
