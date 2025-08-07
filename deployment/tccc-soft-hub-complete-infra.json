@@ -481,11 +481,13 @@
       "name": "[variables('appServicePlanName')]",
       "location": "[parameters('location')]",
       "sku": {
-        "name": "Y1",
-        "tier": "Dynamic"
+        "name": "P1v3",
+        "tier": "PremiumV3",
+        "size": "P1v3",
+        "capacity": 1
       },
       "properties": {
-        "reserved": false
+        "reserved": true
       }
     },
     {
@@ -494,13 +496,14 @@
       "apiVersion": "2022-09-01",
       "name": "[variables('functionAppName')]",
       "location": "[parameters('location')]",
-      "kind": "functionapp",
+      "kind": "functionapp,linux",
       "identity": {
         "type": "SystemAssigned"
       },
       "properties": {
         "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('appServicePlanName'))]",
         "siteConfig": {
+          "linuxFxVersion": "Python|3.11",
           "appSettings": [
             {
               "name": "FUNCTIONS_WORKER_RUNTIME",
